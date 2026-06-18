@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>圖片縮放與壓縮 — 本機版</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+
+<body>
+  <div class="app">
+    <header class="header">
+      <h1>圖片縮放與壓縮</h1>
+    </header>
+
+    <main class="layout">
+      <aside class="panel controls" id="controlsPanel">
+        <section class="block">
+          <label class="dropzone" id="dropzone">
+            <input type="file" id="fileInput" accept="image/*" multiple hidden />
+            <span class="dropzone-icon">📁</span>
+            <span>拖曳圖片到這裡，或點擊選擇</span>
+            <span class="hint">支援 JPG、PNG、WebP、GIF 等</span>
+          </label>
+        </section>
+
+        <section class="block" id="fileListSection" hidden>
+          <div class="file-list-head">
+            <h2>已載入</h2>
+            <span class="file-selection-count" id="fileSelectionCount"></span>
+          </div>
+          <label class="checkbox file-select-all">
+            <input type="checkbox" id="selectAllFiles" checked />
+            全選
+          </label>
+          <ul id="fileList" class="file-list"></ul>
+        </section>
+
+        <section class="block">
+          <h2>尺寸</h2>
+          <div class="row">
+            <label for="scaleSlider">縮放比例</label>
+            <div class="inline-input">
+              <input type="text" class="num-input" id="scaleInput" inputmode="decimal" autocomplete="off"
+                spellcheck="false" value="100" />
+              <span class="unit">%</span>
+            </div>
+          </div>
+          <div class="slider-wrap">
+            <input type="range" id="scaleSlider" min="5" max="200" value="100" step="0.1" />
+          </div>
+
+          <div class="dim-grid">
+            <label class="field">
+              <span>寬度 (px)</span>
+              <input type="text" class="num-input" id="widthInput" inputmode="numeric" autocomplete="off"
+                spellcheck="false" placeholder="—" />
+            </label>
+            <label class="field">
+              <span>高度 (px)</span>
+              <input type="text" class="num-input" id="heightInput" inputmode="numeric" autocomplete="off"
+                spellcheck="false" placeholder="—" />
+            </label>
+          </div>
+
+          <label class="checkbox lock-ratio">
+            <input type="checkbox" id="lockAspect" checked />
+            鎖定長寬比
+          </label>
+
+          <div class="preset-row">
+            <button type="button" class="btn btn-ghost" data-scale="48">48%</button>
+            <button type="button" class="btn btn-ghost" data-scale="100">100%</button>
+          </div>
+          <p class="dim-info" id="dimInfo">—</p>
+        </section>
+
+        <section class="block">
+          <h2>輸出格式</h2>
+          <div class="format-tabs" role="tablist">
+            <button type="button" class="format-tab active" data-format="image/jpeg">JPEG</button>
+            <button type="button" class="format-tab" data-format="image/png">PNG</button>
+            <button type="button" class="format-tab" data-format="image/webp">WebP</button>
+          </div>
+          <div class="row quality-row" id="qualityRow">
+            <label for="qualitySlider">壓縮品質</label>
+            <output id="qualityValue">92</output>
+          </div>
+          <input type="range" id="qualitySlider" min="60" max="100" value="92" step="1" />
+          <div class="preset-row compress-presets">
+            <button type="button" class="btn btn-ghost active" data-quality="92" data-preset="high">92%</button>
+            <button type="button" class="btn btn-ghost" data-quality="85" data-preset="balance">85%</button>
+            <button type="button" class="btn btn-ghost" data-quality="78" data-preset="small">78％</button>
+          </div>
+          <p class="hint" id="qualityHint">目前偏畫質優先。要更小可試「平衡」或改 WebP。</p>
+          <label class="checkbox">
+            <input type="checkbox" id="colorPreserve" checked />
+            保留原始色彩
+          </label>
+          <label class="checkbox">
+            <input type="checkbox" id="smoothEdges" checked />
+            減少鋸齒，平滑邊緣
+          </label>
+          <p class="hint">尺寸不變下要更小：降低壓縮品質或改 WebP。若仍偏灰可改 PNG。</p>
+        </section>
+
+        <section class="block stats">
+          <h2>預估結果</h2>
+          <dl class="stat-grid">
+            <dt>原始大小</dt>
+            <dd id="originalSize">—</dd>
+            <dt>預估大小</dt>
+            <dd id="estimatedSize">—</dd>
+            <dt>節省</dt>
+            <dd id="savings">—</dd>
+          </dl>
+          <p class="hint" id="estimateHint">調整滑桿後會自動試算</p>
+        </section>
+
+        <section class="block actions">
+          <div class="download-dropdown" id="downloadDropdown">
+            <button type="button" class="btn btn-primary download-trigger" id="downloadTrigger" disabled
+              aria-haspopup="menu" aria-expanded="false">
+              下載 ▾
+            </button>
+            <div class="download-menu" id="downloadMenu" role="menu" hidden>
+              <button type="button" role="menuitem" data-download="current">下載目前檔案</button>
+              <button type="button" role="menuitem" data-download="selected" id="downloadSelectedBtn">下載勾選檔案</button>
+              <button type="button" role="menuitem" data-download="all">下載全部檔案</button>
+              <button type="button" role="menuitem" data-download="zip" id="downloadZipBtn">下載 ZIP</button>
+            </div>
+          </div>
+          <p class="hint download-hint">ZIP 與勾選下載：有勾選時只處理勾選檔；未勾選任何檔時改為全部。</p>
+        </section>
+      </aside>
+
+      <section class="panel preview">
+        <div class="preview-header">
+          <h2>畫面預覽</h2>
+          <span class="preview-badge" id="previewBadge">尚未載入圖片</span>
+        </div>
+
+        <div class="preview-mode-tabs" role="tablist">
+          <button type="button" class="mode-tab active" id="btnSinglePreview" data-mode="single">單一預覽</button>
+          <button type="button" class="mode-tab" id="btnComparePreview" data-mode="compare">左右對照</button>
+        </div>
+
+        <label class="checkbox link-panes-row" id="linkPanesRow" hidden>
+          <input type="checkbox" id="linkPanes" checked />
+          同步移動
+        </label>
+
+        <div class="preview-single" id="previewSingle">
+          <div class="pane-viewport" id="singleViewport" data-pane="single">
+            <div class="pane-inner" id="singleInner">
+              <canvas id="singleCanvas"></canvas>
+            </div>
+          </div>
+          <div class="pane-toolbar" id="singleToolbar" hidden>
+            <span>縮放</span>
+            <button type="button" class="btn-zoom" data-pane="single" data-action="out">−</button>
+            <output id="singleZoomLabel">100%</output>
+            <button type="button" class="btn-zoom" data-pane="single" data-action="in">+</button>
+            <button type="button" class="btn-zoom btn-zoom-ghost" data-pane="single" data-action="fit">適合</button>
+          </div>
+        </div>
+
+        <div class="preview-dual" id="previewDual" hidden>
+          <article class="pane">
+            <header class="pane-head">
+              <span>原圖</span>
+              <span class="pane-size" id="originalPaneSize">—</span>
+            </header>
+            <div class="pane-toolbar">
+              <button type="button" class="btn-zoom" data-pane="original" data-action="out">−</button>
+              <output id="originalZoomLabel">100%</output>
+              <button type="button" class="btn-zoom" data-pane="original" data-action="in">+</button>
+              <button type="button" class="btn-zoom btn-zoom-ghost" data-pane="original" data-action="fit">適合</button>
+            </div>
+            <div class="pane-viewport" id="originalViewport" data-pane="original">
+              <div class="pane-inner" id="originalInner">
+                <canvas id="originalCanvas"></canvas>
+              </div>
+            </div>
+          </article>
+          <article class="pane">
+            <header class="pane-head">
+              <span>輸出預覽</span>
+              <span class="pane-size" id="outputPaneSize">—</span>
+            </header>
+            <div class="pane-toolbar">
+              <button type="button" class="btn-zoom" data-pane="output" data-action="out">−</button>
+              <output id="outputZoomLabel">100%</output>
+              <button type="button" class="btn-zoom" data-pane="output" data-action="in">+</button>
+              <button type="button" class="btn-zoom btn-zoom-ghost" data-pane="output" data-action="fit">適合</button>
+            </div>
+            <div class="pane-viewport" id="outputViewport" data-pane="output">
+              <div class="pane-inner" id="outputInner">
+                <canvas id="outputCanvas"></canvas>
+              </div>
+            </div>
+          </article>
+        </div>
+
+        <p class="preview-empty" id="previewEmpty">載入圖片後即可預覽。對照模式可連動移動；取消勾選後左右可各自縮放與拖曳。</p>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <p> </p>
+    </footer>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js" crossorigin="anonymous"></script>
+  <script src="app.js"></script>
+</body>
+
+</html>
