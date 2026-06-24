@@ -116,7 +116,7 @@ function getSelectedEntries() {
 
 function exportFileName(entry) {
   const base = entry.name.replace(/\.[^.]+$/, "");
-  return `${base}.${extensionForMime(state.format)}`;
+  return `${base}.${extensionForMime(entry.format ?? state.format)}`;
 }
 
 function uniqueZipName(name, used) {
@@ -182,20 +182,30 @@ function aspectRatio() {
   return state.naturalHeight / state.naturalWidth || 1;
 }
 
-function dimensionsForImage(naturalW, naturalH) {
+function dimensionsForImage(naturalW, naturalH, customScale) {
   if (!naturalW || !naturalH) return { w: 1, h: 1 };
+  const scale = customScale !== undefined ? customScale : state.scale;
   if (state.lockAspect) {
-    const ratio = state.scale / 100;
+    const ratio = scale / 100;
     return {
       w: Math.max(1, Math.round(naturalW * ratio)),
       h: Math.max(1, Math.round(naturalH * ratio)),
     };
   }
-  const scaleX = state.targetWidth / state.naturalWidth;
-  const scaleY = state.targetHeight / state.naturalHeight;
+  const activeEntry = getActiveEntry();
+  const isActive = activeEntry && activeEntry.naturalWidth === naturalW && activeEntry.naturalHeight === naturalH;
+  if (isActive && state.targetWidth && state.targetHeight) {
+    const scaleX = state.targetWidth / state.naturalWidth;
+    const scaleY = state.targetHeight / state.naturalHeight;
+    return {
+      w: Math.max(1, Math.round(naturalW * scaleX)),
+      h: Math.max(1, Math.round(naturalH * scaleY)),
+    };
+  }
+  const ratio = scale / 100;
   return {
-    w: Math.max(1, Math.round(naturalW * scaleX)),
-    h: Math.max(1, Math.round(naturalH * scaleY)),
+    w: Math.max(1, Math.round(naturalW * ratio)),
+    h: Math.max(1, Math.round(naturalH * ratio)),
   };
 }
 
@@ -206,6 +216,10 @@ function outputDimensions() {
 function syncScaleFromDimensions() {
   if (!state.naturalWidth) return;
   state.scale = (state.targetWidth / state.naturalWidth) * 100;
+  const entry = getActiveEntry();
+  if (entry) {
+    entry.scale = state.scale;
+  }
 }
 
 function syncDimensionsFromScale() {
@@ -471,9 +485,10 @@ async function resizeWithBitmap(source, targetW, targetH, fillWhite) {
   }
 }
 
-async function renderToCanvas(source, w, h) {
+async function renderToCanvas(source, w, h, format) {
   const { w: srcW, h: srcH } = sourceSize(source);
-  const fillWhite = state.format === "image/jpeg";
+  const targetFormat = format !== undefined ? format : state.format;
+  const fillWhite = targetFormat === "image/jpeg";
   if (srcW === w && srcH === h) {
     const canvas = document.createElement("canvas");
     canvas.width = w;
@@ -545,9 +560,9 @@ async function drawOutputPreview(pane, previewSource, w, h) {
 
 async function processImage(entry) {
   const source = await ensureFullSource(entry);
-  const { w, h } = dimensionsForImage(entry.naturalWidth, entry.naturalHeight);
-  const canvas = await renderToCanvas(source, w, h);
-  const blob = await canvasToBlob(canvas, state.format, state.quality);
+  const { w, h } = dimensionsForImage(entry.naturalWidth, entry.naturalHeight, entry.scale);
+  const canvas = await renderToCanvas(source, w, h, entry.format);
+  const blob = await canvasToBlob(canvas, entry.format, entry.quality);
   return { blob, width: w, height: h, canvas };
 }
 
@@ -945,9 +960,15 @@ async function selectFile(index) {
   await ensureThumb(entry);
   state.naturalWidth = entry.naturalWidth;
   state.naturalHeight = entry.naturalHeight;
-  state.scale = 100;
+  state.scale = entry.scale;
+  state.format = entry.format;
+  state.quality = entry.quality;
+
   syncDimensionsFromScale();
   updateDimensionInputs();
+  updateFormatTabsUI();
+  updateQualityUI();
+
   updateFileListUI();
   state.needsCentering = true;
   resetAllPans();
@@ -1108,6 +1129,9 @@ async function addFiles(fileListLike) {
       thumbHeight: 0,
       thumbSource: null,
       fullSource: null,
+      scale: state.scale,
+      format: state.format,
+      quality: state.quality,
     });
   }
 
@@ -1123,6 +1147,10 @@ async function addFiles(fileListLike) {
 function applyScale(v, options = {}) {
   const { refreshPreview = true } = options;
   state.scale = Math.min(200, Math.max(5, v));
+  const entry = getActiveEntry();
+  if (entry) {
+    entry.scale = state.scale;
+  }
   syncDimensionsFromScale();
   updateDimensionInputs();
   updateDimInfo();
@@ -1297,15 +1325,30 @@ function updateQualityRowVisibility() {
   }
 }
 
-function setQuality(percent) {
-  const q = Math.min(100, Math.max(60, percent));
-  state.quality = q / 100;
+function updateFormatTabsUI() {
+  document.querySelectorAll(".format-tab").forEach((t) => {
+    t.classList.toggle("active", t.dataset.format === state.format);
+  });
+}
+
+function updateQualityUI() {
+  const q = Math.round(state.quality * 100);
   qualitySlider.value = q;
   qualityValue.textContent = String(q);
   document.querySelectorAll("[data-preset]").forEach((btn) => {
     btn.classList.toggle("active", Number(btn.dataset.quality) === q);
   });
   updateQualityRowVisibility();
+}
+
+function setQuality(percent) {
+  const q = Math.min(100, Math.max(60, percent));
+  state.quality = q / 100;
+  const entry = getActiveEntry();
+  if (entry) {
+    entry.quality = state.quality;
+  }
+  updateQualityUI();
   schedulePreview();
   scheduleEstimate();
 }
@@ -1315,6 +1358,10 @@ document.querySelectorAll(".format-tab").forEach((tab) => {
     document.querySelectorAll(".format-tab").forEach((t) => t.classList.remove("active"));
     tab.classList.add("active");
     state.format = tab.dataset.format;
+    const entry = getActiveEntry();
+    if (entry) {
+      entry.format = state.format;
+    }
     updateQualityRowVisibility();
     schedulePreview();
     scheduleEstimate();
