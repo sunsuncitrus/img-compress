@@ -1204,7 +1204,7 @@ function setupPaneInteraction(pane) {
     { passive: false }
   );
 
-  viewport.addEventListener("mousedown", (e) => {
+  viewport.addEventListener("pointerdown", (e) => {
     if (e.button !== 0 || !getActiveFile()) return;
     e.preventDefault();
     dragState = {
@@ -1236,8 +1236,8 @@ function endDrag() {
   dragState = null;
 }
 
-window.addEventListener("mousemove", onDragMove);
-window.addEventListener("mouseup", endDrag);
+window.addEventListener("pointermove", onDragMove);
+window.addEventListener("pointerup", endDrag);
 
 dropzone.addEventListener("dragover", (e) => {
   e.preventDefault();
